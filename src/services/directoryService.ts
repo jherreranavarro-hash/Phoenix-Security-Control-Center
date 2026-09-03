@@ -1,7 +1,8 @@
 import { almacen } from "../lib/store";
 import { gruposDemo, skusDemo, usuariosDemo } from "../data/demoTenant";
-import { readOnlyGraphConfigured } from "../config";
+import { productionGraphConfigured, readOnlyGraphConfigured } from "../config";
 import { obtenerGruposReales, obtenerSkusReales, obtenerUsuariosReales } from "../graph/realDirectory";
+import { agregarMiembroGrupoReal, crearGrupoReal, quitarMiembroGrupoReal } from "../graph/realWrites";
 import type { GrupoDirectorio, SkuLicencia, UsuarioDirectorio } from "../types";
 
 /**
@@ -72,9 +73,14 @@ export async function listarGruposEfectivos(): Promise<GrupoDirectorio[]> {
   const [{ grupos }, usuarios] = await Promise.all([obtenerBase(), listarUsuariosEfectivos()]);
   const base = grupos.map((g) => ({
     ...g,
+    clasificacion: (overrides.clasificacionGrupos[g.id] as GrupoDirectorio["clasificacion"]) ?? g.clasificacion,
+    proposito: (overrides.propositoGrupos[g.id] as GrupoDirectorio["proposito"]) ?? g.proposito,
     miembros: usuarios.filter((u) => u.grupos.includes(g.nombre) || u.grupos.includes(g.id)).map((u) => u.id),
   }));
-  const nuevos = overrides.gruposCreados as unknown as GrupoDirectorio[];
+  const nuevos = (overrides.gruposCreados as unknown as GrupoDirectorio[]).map((g) => ({
+    ...g,
+    miembros: usuarios.filter((u) => u.grupos.includes(g.nombre) || u.grupos.includes(g.id)).map((u) => u.id),
+  }));
   return [...base, ...nuevos];
 }
 
@@ -116,9 +122,23 @@ export async function actualizarRoles(id: string, roles: string[]): Promise<Usua
   return (await obtenerUsuarioEfectivo(id))!;
 }
 
-export async function actualizarMembresia(usuarioId: string, grupoNombre: string, agregar: boolean): Promise<void> {
+export async function actualizarMembresia(
+  usuarioId: string,
+  grupoId: string,
+  grupoNombre: string,
+  agregar: boolean,
+): Promise<void> {
   const usuario = await obtenerUsuarioEfectivo(usuarioId);
   if (!usuario) throw new Error(`Usuario ${usuarioId} no encontrado.`);
+
+  const fuente = await fuenteDirectorio();
+  if (fuente === "graph" && productionGraphConfigured) {
+    if (agregar) await agregarMiembroGrupoReal(grupoId, usuarioId);
+    else await quitarMiembroGrupoReal(grupoId, usuarioId);
+    invalidarCacheDirectorio();
+    return;
+  }
+
   const actuales = new Set(almacen.overrides.membresias[usuarioId] ?? usuario.grupos);
   if (agregar) actuales.add(grupoNombre);
   else actuales.delete(grupoNombre);
@@ -152,12 +172,34 @@ export function crearUsuario(datos: {
   return nuevo;
 }
 
-export function crearGrupo(datos: {
+export async function crearGrupo(datos: {
   nombre: string;
   descripcion: string;
   clasificacion: GrupoDirectorio["clasificacion"];
   proposito: GrupoDirectorio["proposito"];
-}): GrupoDirectorio {
+}): Promise<GrupoDirectorio> {
+  const fuente = await fuenteDirectorio();
+
+  if (fuente === "graph" && productionGraphConfigured) {
+    const { id } = await crearGrupoReal({ nombre: datos.nombre, descripcion: datos.descripcion });
+    // La clasificación/propósito son conceptos propios de Phoenix que Graph no
+    // guarda; se registran como override indexado por el id real del grupo.
+    almacen.overrides.clasificacionGrupos[id] = datos.clasificacion;
+    almacen.overrides.propositoGrupos[id] = datos.proposito;
+    almacen.guardarOverrides();
+    invalidarCacheDirectorio();
+    return {
+      id,
+      nombre: datos.nombre,
+      descripcion: datos.descripcion,
+      clasificacion: datos.clasificacion,
+      tipo: "Seguridad",
+      miembros: [],
+      esGrupoEmergencia: false,
+      proposito: datos.proposito,
+    };
+  }
+
   const nuevo: GrupoDirectorio = {
     id: `grp-new-${Date.now()}`,
     nombre: datos.nombre,

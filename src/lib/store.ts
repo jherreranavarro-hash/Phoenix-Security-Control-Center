@@ -22,6 +22,12 @@ interface EstadoAlmacen {
     licenciasAsignadas: Record<string, string[]>;
     exchangeConfig: Record<string, Record<string, unknown>>;
     roles: Record<string, string[]>;
+    // Clasificación/propósito elegidos por el usuario para grupos creados
+    // realmente en Graph (Graph no conoce estos conceptos propios de Phoenix),
+    // indexados por el id real del grupo — evita duplicar el grupo en
+    // gruposCreados, que sí se lee de vuelta desde Graph tras la creación.
+    clasificacionGrupos: Record<string, string[]>;
+    propositoGrupos: Record<string, string>;
   };
   campañasLicencia: Record<string, unknown>[];
 }
@@ -41,6 +47,8 @@ function estadoInicial(): EstadoAlmacen {
       licenciasAsignadas: {},
       exchangeConfig: {},
       roles: {},
+      clasificacionGrupos: {},
+      propositoGrupos: {},
     },
     campañasLicencia: [],
   };

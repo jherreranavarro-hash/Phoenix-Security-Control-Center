@@ -48,7 +48,7 @@ groupsRouter.post("/:id/miembros", requiereEscriturasHabilitadas, async (req, re
         entidad: "Grupo",
         entidadId: req.params.id,
       },
-      () => actualizarMembresia(usuarioId, grupo.nombre, agregar),
+      () => actualizarMembresia(usuarioId, grupo.id, grupo.nombre, agregar),
     );
     res.json({ usuario: await obtenerUsuarioEfectivo(usuarioId), grupos: await listarGruposEfectivos() });
   } catch (error) {

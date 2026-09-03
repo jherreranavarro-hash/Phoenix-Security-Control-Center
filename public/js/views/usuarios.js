@@ -1,5 +1,5 @@
 import { api } from "../api.js";
-import { abrirModal, cerrarModal, esc, toast } from "../ui.js";
+import { abrirModal, badgeCriticidad, badgeEstado, cerrarModal, esc, toast } from "../ui.js";
 
 const TABS = [
   ["usuarios", "Usuarios"],
@@ -184,9 +184,9 @@ function gestionarUsuario(cont, u) {
 async function pintarGrupos(cont) {
   const data = await api.get("/groups");
   cont.innerHTML = `
-    <div class="toolbar"><span style="flex:1"></span><button class="btn-accent" id="btn-nuevo-grupo">+ Crear grupo</button></div>
+    <div class="toolbar"><span style="flex:1"></span><button class="btn-accent" id="btn-nuevo-grupo">+ Crear grupo y desplegar políticas</button></div>
     <div class="table-wrap"><table>
-      <thead><tr><th>Nombre</th><th>Clasificación</th><th>Propósito</th><th>Miembros</th></tr></thead>
+      <thead><tr><th>Nombre</th><th>Clasificación</th><th>Propósito</th><th>Miembros</th><th></th></tr></thead>
       <tbody>
         ${data.grupos
           .map(
@@ -195,6 +195,7 @@ async function pintarGrupos(cont) {
               <td>${(g.clasificacion || []).join(", ")}</td>
               <td>${esc(g.proposito)}</td>
               <td>${g.miembros.length}</td>
+              <td><button class="btn-ghost btn-sm" data-gestionar="${g.id}">Miembros y políticas</button></td>
             </tr>`,
           )
           .join("")}
@@ -202,16 +203,22 @@ async function pintarGrupos(cont) {
     </table></div>
   `;
   cont.querySelector("#btn-nuevo-grupo").addEventListener("click", () => formularioCrearGrupo(cont));
+  cont.querySelectorAll("[data-gestionar]").forEach((btn) =>
+    btn.addEventListener("click", () => pasoMiembrosYPoliticas(cont, data.grupos.find((g) => g.id === btn.dataset.gestionar))),
+  );
 }
+
+const PRODUCTO_POR_CLASIFICACION = { EntraID: "Entra ID", Intune: "Intune", Defender: "Defender", Purview: "Purview" };
 
 function formularioCrearGrupo(cont) {
   abrirModal(
     `
-    <h2>Crear grupo de seguridad</h2>
+    <h2>Paso 1 de 3 — Crear grupo de seguridad</h2>
+    <div class="modal-sub">A continuación podrás agregar miembros reales y elegir qué políticas del catálogo desplegar en este grupo.</div>
     <div class="field"><label>Nombre</label><input id="ng-nombre" placeholder="SEC-Dominio-Proposito" /></div>
     <div class="field"><label>Descripción</label><textarea id="ng-descripcion" rows="2"></textarea></div>
     <div class="field-row">
-      <div class="field"><label>Clasificación</label><select id="ng-clasificacion"><option value="EntraID">Entra ID</option><option value="Intune">Intune</option><option value="Defender">Defender</option><option value="Purview">Purview</option><option value="Todos">Todos</option></select></div>
+      <div class="field"><label>Clasificación (dominio a desplegar)</label><select id="ng-clasificacion"><option value="EntraID">Entra ID</option><option value="Intune">Intune</option><option value="Defender">Defender</option><option value="Purview">Purview</option><option value="Todos">Todos</option></select></div>
       <div class="field"><label>Propósito</label><select id="ng-proposito"><option value="Piloto">Piloto</option><option value="Produccion">Producción</option><option value="Exclusion">Exclusión</option><option value="Operativo">Operativo</option></select></div>
     </div>
     <div class="field-row">
@@ -219,25 +226,168 @@ function formularioCrearGrupo(cont) {
       <div class="field"><label>Aprobador</label><input id="ng-aprobador" /></div>
     </div>
     <div class="field"><label>Justificación</label><textarea id="ng-justificacion" rows="2"></textarea></div>
-    <div class="modal-actions"><button class="btn-ghost" id="ng-cancelar">Cancelar</button><button class="btn-primary" id="ng-guardar">Crear</button></div>
+    <div class="modal-actions"><button class="btn-ghost" id="ng-cancelar">Cancelar</button><button class="btn-primary" id="ng-guardar">Crear grupo y continuar</button></div>
   `,
     {
       onMount: (root) => {
         root.querySelector("#ng-cancelar").addEventListener("click", cerrarModal);
         root.querySelector("#ng-guardar").addEventListener("click", async () => {
           try {
-            await api.post("/groups", {
-              nombre: root.querySelector("#ng-nombre").value.trim(),
+            const solicitante = root.querySelector("#ng-solicitante").value.trim();
+            const aprobador = root.querySelector("#ng-aprobador").value.trim();
+            const nombre = root.querySelector("#ng-nombre").value.trim();
+            if (!nombre || !solicitante || !aprobador) throw new Error("Complete nombre, solicitante y aprobador.");
+            const { grupo } = await api.post("/groups", {
+              nombre,
               descripcion: root.querySelector("#ng-descripcion").value.trim(),
               clasificacion: [root.querySelector("#ng-clasificacion").value],
               proposito: root.querySelector("#ng-proposito").value,
-              solicitante: root.querySelector("#ng-solicitante").value.trim(),
-              aprobador: root.querySelector("#ng-aprobador").value.trim(),
+              solicitante,
+              aprobador,
               justificacion: root.querySelector("#ng-justificacion").value.trim(),
             });
             toast("Grupo creado.", "success");
+            pasoMiembrosYPoliticas(cont, grupo, { solicitante, aprobador });
+          } catch (error) {
+            toast(error.message, "error");
+          }
+        });
+      },
+    },
+  );
+}
+
+async function pasoMiembrosYPoliticas(cont, grupo, prefill = {}) {
+  const [candidatosResp, politicasResp] = await Promise.all([
+    api.get("/deployment/candidatos"),
+    api.get(`/policies${grupo.clasificacion?.[0] && PRODUCTO_POR_CLASIFICACION[grupo.clasificacion[0]] ? `?producto=${encodeURIComponent(PRODUCTO_POR_CLASIFICACION[grupo.clasificacion[0]])}` : ""}`),
+  ]);
+  const miembrosActuales = new Set(grupo.miembros || []);
+  const seleccionPoliticas = new Set();
+
+  abrirModal(
+    `
+    <h2>Paso 2 de 3 — Miembros de "${esc(grupo.nombre)}"</h2>
+    <div class="modal-sub">${miembrosActuales.size} miembro(s) actual(es). Selecciona quién más debe pertenecer a este grupo.</div>
+    <input id="pm-buscar" placeholder="Buscar por nombre, correo o área…" style="width:100%;margin-bottom:10px" />
+    <div style="max-height:280px;overflow:auto" id="pm-lista"></div>
+    <div class="modal-actions">
+      <button class="btn-ghost" id="pm-omitir">Omitir por ahora</button>
+      <button class="btn-primary" id="pm-continuar">Continuar a políticas →</button>
+    </div>
+  `,
+    {
+      onMount: (root) => {
+        const pintarLista = (filtro = "") => {
+          const q = filtro.toLowerCase();
+          const lista = candidatosResp.usuarios.filter(
+            (u) => !q || u.displayName.toLowerCase().includes(q) || u.userPrincipalName.toLowerCase().includes(q) || u.area.toLowerCase().includes(q),
+          );
+          root.querySelector("#pm-lista").innerHTML = lista
+            .map(
+              (u) => `<label style="display:flex;gap:8px;align-items:center;padding:5px 0;border-bottom:1px solid var(--color-border)">
+                <input type="checkbox" class="chk-pm" data-id="${u.id}" ${miembrosActuales.has(u.id) ? "checked" : ""} ${u.esCuentaEmergencia ? "disabled" : ""} />
+                <span style="flex:1">${esc(u.displayName)} <span class="pill">${esc(u.area)}</span>${u.esCuentaEmergencia ? ' <span class="badge badge-critica">Emergencia</span>' : ""}</span>
+              </label>`,
+            )
+            .join("");
+        };
+        pintarLista();
+        root.querySelector("#pm-buscar").addEventListener("input", (ev) => pintarLista(ev.target.value));
+        root.querySelector("#pm-omitir").addEventListener("click", () => pasoPoliticas(cont, grupo, politicasResp.politicas, seleccionPoliticas, prefill));
+        root.querySelector("#pm-continuar").addEventListener("click", async () => {
+          const marcados = Array.from(root.querySelectorAll(".chk-pm")).filter((c) => c.checked && !miembrosActuales.has(c.dataset.id));
+          const desmarcados = Array.from(root.querySelectorAll(".chk-pm")).filter((c) => !c.checked && miembrosActuales.has(c.dataset.id));
+          if (marcados.length === 0 && desmarcados.length === 0) {
+            pasoPoliticas(cont, grupo, politicasResp.politicas, seleccionPoliticas, prefill);
+            return;
+          }
+          const solicitante = prefill.solicitante || window.prompt("Solicitante (correo):", "") || "";
+          const aprobador = prefill.aprobador || window.prompt("Aprobador (correo, distinto del solicitante):", "") || "";
+          const justificacion = "Agregar miembros al grupo recién creado para despliegue.";
+          if (!solicitante || !aprobador) {
+            toast("Se requieren solicitante y aprobador para modificar membresías.", "error");
+            return;
+          }
+          try {
+            for (const chk of [...marcados, ...desmarcados]) {
+              await api.post(`/groups/${grupo.id}/miembros`, {
+                usuarioId: chk.dataset.id,
+                agregar: marcados.includes(chk),
+                solicitante,
+                aprobador,
+                justificacion,
+              });
+            }
+            toast(`Membresía actualizada (${marcados.length} agregado(s), ${desmarcados.length} quitado(s)).`, "success");
+            pasoPoliticas(cont, grupo, politicasResp.politicas, seleccionPoliticas, prefill);
+          } catch (error) {
+            toast(error.message, "error");
+          }
+        });
+      },
+    },
+  );
+}
+
+function pasoPoliticas(cont, grupo, politicas, seleccionPoliticas, prefill) {
+  abrirModal(
+    `
+    <h2>Paso 3 de 3 — Políticas disponibles para "${esc(grupo.nombre)}"</h2>
+    <div class="modal-sub">Catálogo filtrado por dominio (${(grupo.clasificacion || []).join(", ") || "Todos"}). Selecciona las que quieres desplegar en este grupo.</div>
+    <div style="max-height:320px;overflow:auto">
+      <table style="width:100%">
+        <thead><tr><th></th><th>Política</th><th>Producto</th><th>Riesgo</th><th>Estado</th></tr></thead>
+        <tbody>
+          ${politicas
+            .map(
+              (p) => `<tr>
+                <td><input type="checkbox" class="chk-pol" data-id="${p.id}" /></td>
+                <td><strong>${esc(p.nombre)}</strong></td>
+                <td>${esc(p.producto)}</td>
+                <td>${badgeCriticidad(p.riesgo)}</td>
+                <td>${badgeEstado(p.estado)}</td>
+              </tr>`,
+            )
+            .join("") || `<tr><td colspan="5"><div class="empty-state">No hay políticas para este dominio en el catálogo.</div></td></tr>`}
+        </tbody>
+      </table>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-ghost" id="pp-terminar">Terminar sin desplegar políticas</button>
+      <button class="btn-accent" id="pp-crear">Crear cambios gobernados con las seleccionadas</button>
+    </div>
+  `,
+    {
+      onMount: (root) => {
+        root.querySelector("#pp-terminar").addEventListener("click", () => {
+          cerrarModal();
+          pintarGrupos(cont);
+        });
+        root.querySelector("#pp-crear").addEventListener("click", async () => {
+          const ids = Array.from(root.querySelectorAll(".chk-pol"))
+            .filter((c) => c.checked)
+            .map((c) => c.dataset.id);
+          if (ids.length === 0) {
+            toast("Selecciona al menos una política.", "error");
+            return;
+          }
+          const solicitante = prefill.solicitante || window.prompt("Solicitante (correo):", "") || "";
+          const aprobador = prefill.aprobador || window.prompt("Aprobador (correo, distinto del solicitante):", "") || "";
+          if (!solicitante || !aprobador) {
+            toast("Se requieren solicitante y aprobador.", "error");
+            return;
+          }
+          try {
+            await api.post("/changes/desde-politicas", {
+              politicaIds: ids,
+              solicitante,
+              aprobador,
+              justificacion: `Despliegue de políticas en el grupo "${grupo.nombre}" (${(grupo.clasificacion || []).join(", ")}).`,
+            });
+            toast(`${ids.length} cambio(s) gobernado(s) creado(s). Defínelos con alcance = grupo "${grupo.nombre}" en el módulo Despliegue.`, "success");
             cerrarModal();
-            pintarGrupos(cont);
+            window.location.hash = "#/gobierno";
           } catch (error) {
             toast(error.message, "error");
           }
