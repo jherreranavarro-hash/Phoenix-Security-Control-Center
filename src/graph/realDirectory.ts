@@ -51,45 +51,53 @@ export async function obtenerSkusReales(): Promise<SkuLicencia[]> {
 export async function obtenerGruposReales(): Promise<GrupoDirectorio[]> {
   const grupos = (await paginarTodo("/groups?$select=id,displayName,description,securityEnabled,mailEnabled&$top=999")) as any[];
 
-  const resultados: GrupoDirectorio[] = [];
-  for (const g of grupos) {
-    const nombre: string = g.displayName ?? "(sin nombre)";
-    const esEmergencia = RE_EMERGENCIA.test(nombre);
-    let miembros: string[] = [];
-    try {
-      const m = (await paginarTodo(`/groups/${g.id}/members?$select=id&$top=999`)) as any[];
-      miembros = m.map((x) => x.id);
-    } catch (error) {
-      console.error(`[phoenix-security] No se pudieron leer los miembros del grupo ${nombre}:`, error);
-    }
-    resultados.push({
-      id: g.id,
-      nombre,
-      descripcion: g.description ?? "",
-      clasificacion: clasificarGrupo(nombre),
-      tipo: g.securityEnabled ? "Seguridad" : "Microsoft365",
-      miembros,
-      esGrupoEmergencia: esEmergencia,
-      proposito: propositoGrupo(nombre, esEmergencia),
-    });
-  }
-  return resultados;
+  // Los miembros de cada grupo se piden todos en paralelo (no uno por uno en
+  // secuencia) para no acumular la latencia de red grupo por grupo.
+  return Promise.all(
+    grupos.map(async (g): Promise<GrupoDirectorio> => {
+      const nombre: string = g.displayName ?? "(sin nombre)";
+      const esEmergencia = RE_EMERGENCIA.test(nombre);
+      let miembros: string[] = [];
+      try {
+        const m = (await paginarTodo(`/groups/${g.id}/members?$select=id&$top=999`)) as any[];
+        miembros = m.map((x) => x.id);
+      } catch (error) {
+        console.error(`[phoenix-security] No se pudieron leer los miembros del grupo ${nombre}:`, error);
+      }
+      return {
+        id: g.id,
+        nombre,
+        descripcion: g.description ?? "",
+        clasificacion: clasificarGrupo(nombre),
+        tipo: g.securityEnabled ? "Seguridad" : "Microsoft365",
+        miembros,
+        esGrupoEmergencia: esEmergencia,
+        proposito: propositoGrupo(nombre, esEmergencia),
+      };
+    }),
+  );
 }
 
 async function obtenerRolesPorUsuario(): Promise<Map<string, string[]>> {
   const mapa = new Map<string, string[]>();
   try {
     const roles = (await paginarTodo("/directoryRoles")) as any[];
-    for (const rol of roles) {
-      try {
-        const miembros = (await graphLectura.get(`/directoryRoles/${rol.id}/members?$select=id`)) as any;
-        for (const m of miembros?.value ?? []) {
-          const lista = mapa.get(m.id) ?? [];
-          lista.push(rol.displayName);
-          mapa.set(m.id, lista);
+    // Igual que con los grupos: los miembros de cada rol se piden en paralelo.
+    const porRol = await Promise.all(
+      roles.map(async (rol) => {
+        try {
+          const miembros = (await graphLectura.get(`/directoryRoles/${rol.id}/members?$select=id`)) as any;
+          return { nombre: rol.displayName as string, ids: (miembros?.value ?? []).map((m: any) => m.id as string) };
+        } catch {
+          return { nombre: rol.displayName as string, ids: [] as string[] };
         }
-      } catch {
-        // Continúa con los demás roles si uno falla.
+      }),
+    );
+    for (const { nombre, ids } of porRol) {
+      for (const id of ids) {
+        const lista = mapa.get(id) ?? [];
+        lista.push(nombre);
+        mapa.set(id, lista);
       }
     }
   } catch (error) {
