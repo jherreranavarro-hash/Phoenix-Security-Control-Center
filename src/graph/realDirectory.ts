@@ -101,13 +101,28 @@ async function obtenerRolesPorUsuario(): Promise<Map<string, string[]>> {
   return mapa;
 }
 
+async function intentar<T>(promesa: Promise<T>, valorPorDefecto: T, mensaje: string): Promise<T> {
+  try {
+    return await promesa;
+  } catch (error) {
+    console.error(`[phoenix-security] ${mensaje}`, error);
+    return valorPorDefecto;
+  }
+}
+
 export async function obtenerUsuariosReales(): Promise<UsuarioDirectorio[]> {
+  // La lista de usuarios es la base: si falla, no hay nada que construir y se
+  // propaga el error para que el llamador caiga a modo demostración completo.
+  // Licencias, grupos y roles son complementos independientes: si a la
+  // identidad de solo lectura le falta un permiso específico para alguno de
+  // ellos (Directory.Read.All para SKU/roles, etc.), esa sección queda vacía
+  // pero los usuarios reales igual se muestran.
   const [usuariosGraph, skus, gruposReales, rolesPorUsuario] = await Promise.all([
     paginarTodo(
       "/users?$select=id,displayName,userPrincipalName,mail,department,jobTitle,accountEnabled,assignedLicenses&$top=999",
     ) as Promise<any[]>,
-    obtenerSkusReales(),
-    obtenerGruposReales(),
+    intentar(obtenerSkusReales(), [], "No fue posible leer /subscribedSkus (requiere Directory.Read.All u Organization.Read.All). Las licencias quedarán vacías hasta conceder el permiso."),
+    intentar(obtenerGruposReales(), [], "No fue posible leer /groups (requiere GroupMember.Read.All o Group.Read.All). Los grupos quedarán vacíos."),
     obtenerRolesPorUsuario(),
   ]);
 

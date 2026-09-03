@@ -15,15 +15,26 @@ async function obtenerDominiosEInvitados(): Promise<{
   invitados: typeof invitadosDemo;
   fuente: "graph" | "demostracion";
 }> {
-  if (readOnlyGraphConfigured) {
-    try {
-      const [dominios, invitados] = await Promise.all([obtenerDominiosReales(), obtenerInvitadosReales()]);
-      return { dominios, invitados, fuente: "graph" };
-    } catch (error) {
-      console.error("[phoenix-security] No se pudo leer dominios/invitados reales, se usa demostración:", error);
-    }
+  if (!readOnlyGraphConfigured) {
+    return { dominios: dominiosVerificadosDemo, invitados: invitadosDemo, fuente: "demostracion" };
   }
-  return { dominios: dominiosVerificadosDemo, invitados: invitadosDemo, fuente: "demostracion" };
+
+  // Dominios e invitados se leen de forma independiente: si a la identidad de
+  // solo lectura le falta Domain.Read.All, por ejemplo, los invitados (que
+  // solo requieren User.Read.All) igual se muestran reales.
+  const dominios = await obtenerDominiosReales().catch((error) => {
+    console.error(
+      "[phoenix-security] No fue posible leer /domains (requiere Domain.Read.All). Se muestran dominios de demostración.",
+      error,
+    );
+    return dominiosVerificadosDemo;
+  });
+  const invitados = await obtenerInvitadosReales().catch((error) => {
+    console.error("[phoenix-security] No fue posible leer usuarios invitados. Se muestran invitados de demostración.", error);
+    return invitadosDemo;
+  });
+
+  return { dominios, invitados, fuente: "graph" };
 }
 
 domainsRouter.get("/", async (_req, res) => {
