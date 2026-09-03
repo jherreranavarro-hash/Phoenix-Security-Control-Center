@@ -1,0 +1,24 @@
+# Dependencias
+node_modules/
+
+# Build
+dist/
+
+# Entorno / secretos — nunca commitear
+.env
+.env.local
+.env.*.local
+
+# Almacén de gobierno en tiempo de ejecución (bitácora, cambios, overrides de demo)
+data/*.json
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Editor / SO
+.vscode/*
+!.vscode/extensions.json
+.DS_Store
+Thumbs.db

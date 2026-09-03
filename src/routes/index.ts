@@ -1,0 +1,30 @@
+import { Router } from "express";
+import { healthRouter } from "./health";
+import { dashboardRouter } from "./dashboard";
+import { assessmentRouter } from "./assessment";
+import { policiesRouter } from "./policies";
+import { changesRouter } from "./changes";
+import { deploymentRouter } from "./deployment";
+import { usersRouter } from "./users";
+import { groupsRouter } from "./groups";
+import { exchangeRouter } from "./exchange";
+import { licensesRouter } from "./licenses";
+import { artifactsRouter } from "./artifacts";
+import { auditRouter } from "./audit";
+import { domainsRouter } from "./domains";
+
+export const apiRouter = Router();
+
+apiRouter.use("/health", healthRouter);
+apiRouter.use("/dashboard", dashboardRouter);
+apiRouter.use("/assessment", assessmentRouter);
+apiRouter.use("/policies", policiesRouter);
+apiRouter.use("/changes", changesRouter);
+apiRouter.use("/deployment", deploymentRouter);
+apiRouter.use("/users", usersRouter);
+apiRouter.use("/groups", groupsRouter);
+apiRouter.use("/exchange", exchangeRouter);
+apiRouter.use("/licenses", licensesRouter);
+apiRouter.use("/artifacts", artifactsRouter);
+apiRouter.use("/audit", auditRouter);
+apiRouter.use("/domains", domainsRouter);

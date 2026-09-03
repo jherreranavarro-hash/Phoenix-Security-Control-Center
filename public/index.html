@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Phoenix Security Control Center</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar" id="sidebar">
+      <div class="brand">
+        <div class="brand-mark">PS</div>
+        <div class="brand-text">
+          <strong>Phoenix</strong>
+          <span>Security Control Center</span>
+        </div>
+      </div>
+      <nav class="nav" id="nav">
+        <a href="#/resumen" data-ruta="resumen">Resumen</a>
+        <a href="#/dashboard" data-ruta="dashboard">Dashboard</a>
+        <a href="#/assessment" data-ruta="assessment">Assessment</a>
+        <a href="#/usuarios" data-ruta="usuarios">Usuarios</a>
+        <a href="#/gobierno" data-ruta="gobierno">Gobierno</a>
+        <a href="#/artefactos" data-ruta="artefactos">Artefactos</a>
+        <a href="#/politicas" data-ruta="politicas">Políticas</a>
+        <a href="#/despliegue" data-ruta="despliegue">Despliegue</a>
+        <a href="#/integraciones" data-ruta="integraciones">Integraciones</a>
+      </nav>
+      <div class="sidebar-footer">
+        <div class="tenant-name">Tenant: Phoenix Service</div>
+        <div id="modo-indicador" class="badge badge-demo">Cargando…</div>
+      </div>
+    </aside>
+
+    <div class="main-column">
+      <header class="topbar">
+        <button class="burger" id="burger" aria-label="Abrir menú">☰</button>
+        <div class="topbar-title" id="topbar-title">Resumen ejecutivo</div>
+        <div class="topbar-user" id="topbar-user">—</div>
+      </header>
+      <main class="content" id="app"></main>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="modal-root" hidden></div>
+  <div class="toast-stack" id="toast-stack"></div>
+
+  <script type="module" src="/js/main.js"></script>
+</body>
+</html>
