@@ -92,18 +92,75 @@ async function pintarUsuarios(cont) {
   cont.querySelector("#btn-nuevo-usuario").addEventListener("click", () => formularioCrearUsuario(cont));
 }
 
-function formularioCrearUsuario(cont) {
+function generarPasswordVisible() {
+  const mayus = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+  const minus = "abcdefghijkmnpqrstuvwxyz";
+  const numeros = "23456789";
+  const simbolos = "!@#$%^&*";
+  const todo = mayus + minus + numeros + simbolos;
+  const azar = (alfabeto) => alfabeto[Math.floor(Math.random() * alfabeto.length)];
+  const caracteres = [azar(mayus), azar(minus), azar(numeros), azar(simbolos)];
+  while (caracteres.length < 12) caracteres.push(azar(todo));
+  for (let i = caracteres.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [caracteres[i], caracteres[j]] = [caracteres[j], caracteres[i]];
+  }
+  return caracteres.join("");
+}
+
+async function formularioCrearUsuario(cont) {
+  const [dominiosResp, skusResp] = await Promise.all([api.get("/domains"), api.get("/licenses/skus")]);
+  const dominios = dominiosResp.dominios.filter((d) => d.verificado);
+  const dominioPredeterminado = dominiosResp.dominioPredeterminado;
+
   abrirModal(
     `
     <h2>Crear usuario</h2>
     <div class="field-row">
       <div class="field"><label>Nombre completo</label><input id="nu-nombre" /></div>
-      <div class="field"><label>Correo (UPN)</label><input id="nu-upn" placeholder="nombre@phoenixservice.com" /></div>
+      <div class="field">
+        <label>Correo (UPN)</label>
+        <div style="display:flex;gap:6px">
+          <input id="nu-alias" placeholder="nombre.apellido" style="flex:1" />
+          <span style="align-self:center">@</span>
+          <select id="nu-dominio" style="flex:1">
+            ${dominios.map((d) => `<option value="${esc(d.dominio)}" ${d.dominio === dominioPredeterminado ? "selected" : ""}>${esc(d.dominio)}</option>`).join("") || '<option value="">Sin dominios verificados</option>'}
+          </select>
+        </div>
+      </div>
     </div>
     <div class="field-row">
       <div class="field"><label>Área</label><input id="nu-area" /></div>
       <div class="field"><label>Cargo</label><input id="nu-cargo" /></div>
     </div>
+
+    <div class="field">
+      <label>Licencias a asignar</label>
+      <div class="checklist" style="margin:0">
+        ${skusResp.skus
+          .map(
+            (s) => `<label style="font-weight:500">
+              <input type="checkbox" class="chk-nu-licencia" value="${esc(s.skuPartNumber)}" ${s.disponibles <= 0 ? "disabled" : ""} />
+              ${esc(s.nombreComercial)} <span class="pill">${s.disponibles} disponible${s.disponibles === 1 ? "" : "s"}</span>
+            </label>`,
+          )
+          .join("") || "<p class='section-sub' style='margin:0'>No hay licencias en el catálogo.</p>"}
+      </div>
+    </div>
+
+    <div class="field-row">
+      <div class="field">
+        <label>Contraseña inicial</label>
+        <div style="display:flex;gap:6px">
+          <input id="nu-password" style="flex:1" placeholder="Se genera automáticamente si se deja en blanco" />
+          <button type="button" class="btn-ghost btn-sm" id="nu-generar-password">Generar</button>
+        </div>
+      </div>
+      <div class="field" style="align-self:flex-end">
+        <label><input type="checkbox" id="nu-forzar-cambio" checked /> Forzar cambio de contraseña en el próximo inicio de sesión</label>
+      </div>
+    </div>
+
     <div class="field-row">
       <div class="field"><label>Solicitante</label><input id="nu-solicitante" /></div>
       <div class="field"><label>Aprobador</label><input id="nu-aprobador" /></div>
@@ -114,19 +171,31 @@ function formularioCrearUsuario(cont) {
     {
       onMount: (root) => {
         root.querySelector("#nu-cancelar").addEventListener("click", cerrarModal);
+        root.querySelector("#nu-generar-password").addEventListener("click", () => {
+          root.querySelector("#nu-password").value = generarPasswordVisible();
+        });
         root.querySelector("#nu-guardar").addEventListener("click", async () => {
           try {
-            await api.post("/users", {
+            const alias = root.querySelector("#nu-alias").value.trim();
+            const dominio = root.querySelector("#nu-dominio").value;
+            if (!alias || !dominio) throw new Error("Complete el correo (alias y dominio).");
+            const userPrincipalName = `${alias}@${dominio}`;
+            const licencias = Array.from(root.querySelectorAll(".chk-nu-licencia")).filter((c) => c.checked).map((c) => c.value);
+
+            const resp = await api.post("/users", {
               displayName: root.querySelector("#nu-nombre").value.trim(),
-              userPrincipalName: root.querySelector("#nu-upn").value.trim(),
+              userPrincipalName,
               area: root.querySelector("#nu-area").value.trim(),
               cargo: root.querySelector("#nu-cargo").value.trim(),
+              password: root.querySelector("#nu-password").value.trim(),
+              forzarCambioPassword: root.querySelector("#nu-forzar-cambio").checked,
+              licencias,
               solicitante: root.querySelector("#nu-solicitante").value.trim(),
               aprobador: root.querySelector("#nu-aprobador").value.trim(),
               justificacion: root.querySelector("#nu-justificacion").value.trim(),
             });
-            toast("Usuario creado.", "success");
             cerrarModal();
+            mostrarPasswordCreada(resp.usuario, resp.passwordTemporal);
             pintarUsuarios(cont);
           } catch (error) {
             toast(error.message, "error");
@@ -134,6 +203,21 @@ function formularioCrearUsuario(cont) {
         });
       },
     },
+  );
+}
+
+function mostrarPasswordCreada(usuario, passwordTemporal) {
+  abrirModal(
+    `
+    <h2>Usuario creado: ${esc(usuario.displayName)}</h2>
+    <div class="alert alert-warn">Esta es la única vez que se muestra la contraseña inicial. Cópiala y entrégasela al usuario por un canal seguro.</div>
+    <div class="field-row">
+      <div class="field"><label>Correo (UPN)</label><input value="${esc(usuario.userPrincipalName)}" readonly /></div>
+      <div class="field"><label>Contraseña inicial</label><input value="${esc(passwordTemporal)}" readonly style="font-family:monospace" /></div>
+    </div>
+    <div class="modal-actions"><button class="btn-primary" id="npc-cerrar">Entendido</button></div>
+  `,
+    { onMount: (root) => root.querySelector("#npc-cerrar").addEventListener("click", () => { cerrarModal(); toast("Usuario creado.", "success"); }) },
   );
 }
 

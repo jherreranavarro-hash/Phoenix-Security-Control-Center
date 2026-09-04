@@ -2,7 +2,13 @@ import { almacen } from "../lib/store";
 import { gruposDemo, skusDemo, usuariosDemo } from "../data/demoTenant";
 import { productionGraphConfigured, readOnlyGraphConfigured } from "../config";
 import { obtenerGruposReales, obtenerSkusReales, obtenerUsuariosReales } from "../graph/realDirectory";
-import { agregarMiembroGrupoReal, crearGrupoReal, quitarMiembroGrupoReal } from "../graph/realWrites";
+import {
+  agregarMiembroGrupoReal,
+  asignarLicenciaReal,
+  crearGrupoReal,
+  crearUsuarioReal,
+  quitarMiembroGrupoReal,
+} from "../graph/realWrites";
 import type { GrupoDirectorio, SkuLicencia, UsuarioDirectorio } from "../types";
 
 /**
@@ -146,12 +152,54 @@ export async function actualizarMembresia(
   almacen.guardarOverrides();
 }
 
-export function crearUsuario(datos: {
+export async function crearUsuario(datos: {
   displayName: string;
   area: string;
   cargo: string;
   userPrincipalName: string;
-}): UsuarioDirectorio {
+  password: string;
+  forzarCambioPassword: boolean;
+  licencias: string[];
+}): Promise<UsuarioDirectorio> {
+  const fuente = await fuenteDirectorio();
+
+  if (fuente === "graph" && productionGraphConfigured) {
+    const { id } = await crearUsuarioReal({
+      displayName: datos.displayName,
+      userPrincipalName: datos.userPrincipalName,
+      mailNickname: datos.userPrincipalName.split("@")[0],
+      area: datos.area,
+      cargo: datos.cargo,
+      password: datos.password,
+      forzarCambioPassword: datos.forzarCambioPassword,
+    });
+
+    if (datos.licencias.length > 0) {
+      const skus = await listarSkusEfectivos();
+      for (const skuPart of datos.licencias) {
+        const sku = skus.find((s) => s.skuPartNumber === skuPart);
+        if (sku) await asignarLicenciaReal(id, sku.skuId);
+      }
+    }
+
+    invalidarCacheDirectorio();
+    return {
+      id,
+      displayName: datos.displayName,
+      userPrincipalName: datos.userPrincipalName,
+      mail: datos.userPrincipalName,
+      area: datos.area,
+      cargo: datos.cargo,
+      accountEnabled: true,
+      roles: [],
+      licencias: datos.licencias,
+      grupos: [],
+      mfaRegistrado: false,
+      esCuentaEmergencia: false,
+      buzon: { alias: [datos.userPrincipalName], respuestaAutomatica: false, delegados: [], esCompartido: false },
+    };
+  }
+
   const nuevo: UsuarioDirectorio = {
     id: `usr-new-${Date.now()}`,
     displayName: datos.displayName,
@@ -161,7 +209,7 @@ export function crearUsuario(datos: {
     cargo: datos.cargo,
     accountEnabled: true,
     roles: [],
-    licencias: [],
+    licencias: datos.licencias,
     grupos: [],
     mfaRegistrado: false,
     esCuentaEmergencia: false,

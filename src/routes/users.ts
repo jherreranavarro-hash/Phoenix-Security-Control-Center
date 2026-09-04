@@ -8,9 +8,11 @@ import {
   crearUsuario,
   fuenteDirectorio,
   invalidarCacheDirectorio,
+  listarSkusEfectivos,
   listarUsuariosEfectivos,
   obtenerUsuarioEfectivo,
 } from "../services/directoryService";
+import { generarPasswordTemporal } from "../graph/realWrites";
 
 export const usersRouter = Router();
 
@@ -53,7 +55,29 @@ usersRouter.get("/:id", async (req, res) => {
 
 usersRouter.post("/", requiereEscriturasHabilitadas, async (req, res) => {
   try {
-    const { displayName, area, cargo, userPrincipalName, solicitante, aprobador, justificacion } = req.body;
+    const {
+      displayName,
+      area,
+      cargo,
+      userPrincipalName,
+      password,
+      forzarCambioPassword = true,
+      licencias = [],
+      solicitante,
+      aprobador,
+      justificacion,
+    } = req.body;
+
+    const skus = await listarSkusEfectivos();
+    for (const skuPart of licencias as string[]) {
+      const sku = skus.find((s) => s.skuPartNumber === skuPart);
+      if (sku && sku.disponibles <= 0) {
+        throw new Error(`No hay licencias disponibles del SKU "${sku.nombreComercial}" (${sku.disponibles} disponibles).`);
+      }
+    }
+
+    const passwordFinal = (password as string)?.trim() || generarPasswordTemporal();
+
     const usuario = await ejecutarAccionGobernada(
       {
         solicitante,
@@ -63,9 +87,18 @@ usersRouter.post("/", requiereEscriturasHabilitadas, async (req, res) => {
         entidad: "Usuario",
         entidadId: userPrincipalName,
       },
-      () => crearUsuario({ displayName, area, cargo, userPrincipalName }),
+      () =>
+        crearUsuario({
+          displayName,
+          area,
+          cargo,
+          userPrincipalName,
+          password: passwordFinal,
+          forzarCambioPassword: Boolean(forzarCambioPassword),
+          licencias,
+        }),
     );
-    res.status(201).json({ usuario });
+    res.status(201).json({ usuario, passwordTemporal: passwordFinal });
   } catch (error) {
     manejarError(res, error);
   }
