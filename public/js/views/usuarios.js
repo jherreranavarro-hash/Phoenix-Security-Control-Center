@@ -68,11 +68,11 @@ async function pintarUsuarios(cont) {
       lista
         .map(
           (u) => `<tr>
-            <td><strong>${esc(u.displayName)}</strong>${u.esCuentaEmergencia ? ' <span class="badge badge-critica">Emergencia</span>' : ""}</td>
-            <td>${esc(u.userPrincipalName)}</td>
-            <td>${esc(u.area)}</td>
-            <td>${u.roles.join(", ") || "—"}</td>
-            <td>${u.licencias.length ? u.licencias.join(", ") : "Sin licencia"}</td>
+            <td class="celda-truncar" title="${esc(u.displayName)}"><strong>${esc(u.displayName)}</strong>${u.esCuentaEmergencia ? ' <span class="badge badge-critica">Emergencia</span>' : ""}</td>
+            <td class="celda-truncar" title="${esc(u.userPrincipalName)}">${esc(u.userPrincipalName)}</td>
+            <td class="celda-truncar" title="${esc(u.area)}">${esc(u.area)}</td>
+            <td>${u.roles.length ? `<div class="pill-list compacta">${u.roles.map((r) => `<span class="pill">${esc(r)}</span>`).join("")}</div>` : "—"}</td>
+            <td>${u.licencias.length ? `<div class="pill-list compacta">${u.licencias.map((l) => `<span class="pill">${esc(l)}</span>`).join("")}</div>` : '<span class="badge badge-neutro">Sin licencia</span>'}</td>
             <td>${u.mfaRegistrado ? "✅" : "❌"}</td>
             <td><span class="badge ${u.accountEnabled ? "badge-sync" : "badge-critica"}">${u.accountEnabled ? "Activo" : "Bloqueado"}</span></td>
             <td><button class="btn-ghost btn-sm" data-usuario="${u.id}">Gestionar</button></td>
@@ -428,9 +428,9 @@ async function pintarLicencias(cont) {
     cont.querySelector("#tbl-licencias").innerHTML = lista
       .map(
         (u) => `<tr>
-          <td><strong>${esc(u.displayName)}</strong></td>
-          <td>${esc(u.area)}</td>
-          <td>${u.licencias.length ? u.licencias.join(", ") : '<span class="badge badge-neutro">Sin licencia</span>'}</td>
+          <td class="celda-truncar" title="${esc(u.displayName)}"><strong>${esc(u.displayName)}</strong></td>
+          <td class="celda-truncar" title="${esc(u.area)}">${esc(u.area)}</td>
+          <td>${u.licencias.length ? `<div class="pill-list compacta">${u.licencias.map((l) => `<span class="pill">${esc(l)}</span>`).join("")}</div>` : '<span class="badge badge-neutro">Sin licencia</span>'}</td>
           <td>${u.accountEnabled ? "Activo" : "Bloqueado"}</td>
           <td><button class="btn-ghost btn-sm" data-lic="${u.id}">Gestionar licencia</button></td>
         </tr>`,
