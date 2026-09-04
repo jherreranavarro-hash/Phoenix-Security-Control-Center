@@ -1,5 +1,6 @@
 import { Router } from "express";
-import { config, isDemoMode, productionGraphConfigured, readOnlyGraphConfigured } from "../config";
+import { isDemoMode, productionGraphConfigured, readOnlyGraphConfigured } from "../config";
+import { escriturasEstanHabilitadas } from "../lib/writeState";
 
 export const healthRouter = Router();
 
@@ -10,7 +11,7 @@ healthRouter.get("/", (req, res) => {
     modoDemostracion: isDemoMode,
     lecturaConectadaAGraph: readOnlyGraphConfigured,
     produccionConectadaAGraph: productionGraphConfigured,
-    escriturasHabilitadas: config.enableWrites,
+    escriturasHabilitadas: escriturasEstanHabilitadas(),
     fecha: new Date().toISOString(),
     usuario: req.usuario,
   });

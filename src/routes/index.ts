@@ -12,6 +12,7 @@ import { licensesRouter } from "./licenses";
 import { artifactsRouter } from "./artifacts";
 import { auditRouter } from "./audit";
 import { domainsRouter } from "./domains";
+import { systemRouter } from "./system";
 
 export const apiRouter = Router();
 
@@ -28,3 +29,4 @@ apiRouter.use("/licenses", licensesRouter);
 apiRouter.use("/artifacts", artifactsRouter);
 apiRouter.use("/audit", auditRouter);
 apiRouter.use("/domains", domainsRouter);
+apiRouter.use("/system", systemRouter);
