@@ -1,5 +1,5 @@
 export const config = {
-  port: Number(process.env.PHX_PORT ?? 4100),
+  port: Number(process.env.PORT ?? process.env.PHX_PORT ?? 4100),
   nodeEnv: process.env.NODE_ENV ?? "development",
 
   tenantId: process.env.PHX_TENANT_ID ?? "",
@@ -17,6 +17,14 @@ export const config = {
   licenseApproverUpn: (process.env.PHX_LICENSE_APPROVER_UPN ?? "").toLowerCase().trim(),
 
   keyVaultUri: process.env.PHX_KEYVAULT_URI ?? "",
+
+  // Carpeta donde vive data/store.json (cambios, auditoría, overrides). Por
+  // defecto es relativa al código desplegado, lo cual funciona en desarrollo
+  // local pero NO en Azure App Service si el sitio corre en modo "Run From
+  // Package" (wwwroot montado de solo lectura): ahí hay que fijar esta
+  // variable a una ruta dentro de /home (ej. /home/data), que es
+  // almacenamiento persistente y con permiso de escritura.
+  dataDir: process.env.PHX_DATA_DIR ?? "",
 
   devUser: {
     upn: process.env.PHX_DEV_USER_UPN ?? "demo.admin@phoenixservice.com",

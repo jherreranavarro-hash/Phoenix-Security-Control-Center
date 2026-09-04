@@ -1,5 +1,6 @@
 import { mkdirSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { config } from "../config";
 import type { CambioGobernado, RegistroAuditoria } from "../types";
 
 /**
@@ -32,7 +33,7 @@ interface EstadoAlmacen {
   campañasLicencia: Record<string, unknown>[];
 }
 
-const DATA_DIR = join(__dirname, "..", "..", "data");
+const DATA_DIR = config.dataDir || join(__dirname, "..", "..", "data");
 const DATA_FILE = join(DATA_DIR, "store.json");
 
 function estadoInicial(): EstadoAlmacen {
