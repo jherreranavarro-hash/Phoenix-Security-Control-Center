@@ -148,6 +148,35 @@ npm run build && npm start
 Sin variables de entorno de Microsoft Graph configuradas, la aplicación
 arranca igual en modo demostración con datos de ejemplo de Phoenix Service.
 
+## Despliegue a Azure App Service
+
+`.github/workflows/deploy-azure.yml` compila el proyecto y lo despliega
+automáticamente con cada push a `main`. Antes de que funcione hay que
+completar dos cosas una sola vez:
+
+1. **Nombre del App Service**: editar `AZURE_WEBAPP_NAME` en el propio
+   archivo del workflow (por defecto dice `CAMBIAR-por-el-nombre-de-tu-App-Service`).
+2. **Secreto `AZURE_WEBAPP_PUBLISH_PROFILE`**: en el portal de Azure, abrir
+   el App Service → **Overview** → **Get publish profile** (descarga un
+   archivo `.PublishSettings`). Copiar todo su contenido y pegarlo como un
+   nuevo *secret* en GitHub: repositorio → **Settings** → **Secrets and
+   variables** → **Actions** → **New repository secret**, con el nombre
+   exacto `AZURE_WEBAPP_PUBLISH_PROFILE`.
+
+También hay que configurar, directamente en el App Service (Configuration →
+General settings / Application settings), lo siguiente — el workflow no lo
+hace por ti:
+
+- **Startup Command**: `npm start`
+- **Runtime stack**: Node 22 LTS (Linux)
+- Todas las variables de `.env.example` que apliquen (`PHX_TENANT_ID`,
+  credenciales de las dos identidades, `PHX_LICENSE_APPROVER_UPN`, etc.)
+- `PHX_DATA_DIR=/home/data` — necesario porque el paquete que sube el
+  workflow se despliega en modo solo-lectura; sin esto, la bitácora de
+  auditoría y los cambios gobernados no se podrían guardar.
+- Activar **Authentication** (Easy Auth) con proveedor Microsoft, para que
+  la app identifique al usuario real en vez del usuario de demostración.
+
 ## Licenciamiento base y funciones que requieren licencias adicionales
 
 La plataforma asume **Microsoft 365 Business Premium** como base (Entra ID

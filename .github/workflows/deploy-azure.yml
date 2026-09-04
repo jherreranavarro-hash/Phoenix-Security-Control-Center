@@ -1,0 +1,63 @@
+name: Desplegar a Azure App Service
+
+# Se ejecuta automáticamente con cada push a main, y también se puede
+# lanzar a mano desde la pestaña "Actions" de GitHub (botón "Run workflow").
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch: {}
+
+env:
+  # OBLIGATORIO: reemplaza esto por el nombre exacto de tu App Service en
+  # Azure (el que aparece en la URL https://<este-nombre>.azurewebsites.net).
+  AZURE_WEBAPP_NAME: CAMBIAR-por-el-nombre-de-tu-App-Service
+  NODE_VERSION: "22"
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Descargar código
+        uses: actions/checkout@v4
+
+      - name: Configurar pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Configurar Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Instalar dependencias
+        run: pnpm install --frozen-lockfile
+
+      - name: Verificar tipos
+        run: pnpm run typecheck
+
+      - name: Compilar
+        run: pnpm run build
+
+      - name: Dejar solo dependencias de producción
+        run: pnpm install --frozen-lockfile --prod
+
+      - name: Armar el paquete a desplegar
+        run: |
+          mkdir -p release
+          cp -r dist release/dist
+          cp -r public release/public
+          cp -r node_modules release/node_modules
+          cp package.json release/package.json
+
+      - name: Desplegar en Azure App Service
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ env.AZURE_WEBAPP_NAME }}
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+          package: release
