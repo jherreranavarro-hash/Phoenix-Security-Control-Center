@@ -1,8 +1,16 @@
 import { obtenerCambio } from "./changeService";
+import { almacen } from "../lib/store";
 import { hallazgosDemo } from "../data/demoAssessment";
 import { catalogoPoliticas } from "../data/policyCatalog";
-import { rankingAccionesPrioritarias } from "./scoringService";
-import type { CambioGobernado } from "../types";
+import {
+  META_ANUAL,
+  PUNTO_INFLEXION,
+  calcularPuntajeGlobal,
+  coberturaPorDominio,
+  contarBrechasPorCriticidad,
+  rankingAccionesPrioritarias,
+} from "./scoringService";
+import type { CambioGobernado, EstadoCambio, Hallazgo } from "../types";
 
 export type TipoArtefacto =
   | "politica-gobierno"
@@ -172,4 +180,116 @@ ${filas}
 Frecuencia de revisión: anual (revisión completa), trimestral (spot-check de responsables y licencias).
 `;
   return { nombreArchivo: `inventario-configuraciones-${Date.now()}.md`, contenido };
+}
+
+const ETIQUETA_ESTADO_CAMBIO: Record<EstadoCambio, string> = {
+  Evaluacion: "Evaluación",
+  Diseno: "Diseño",
+  Piloto: "Piloto",
+  Aprobacion: "Aprobación",
+  Produccion: "Producción",
+  Revertido: "Revertido",
+  Cerrado: "Cerrado",
+  Rechazado: "Rechazado",
+};
+
+const ORDEN_CRITICIDAD: Record<Hallazgo["criticidad"], number> = { Critica: 0, Alta: 1, Media: 2, Baja: 3 };
+
+/**
+ * Informe de gobierno con el mismo espíritu que los reportes de "Assessment /
+ * puntos de mejora" de las consolas de Microsoft (ej. Puntuación de seguridad):
+ * un resumen ejecutivo, la lista de issues abiertos (hallazgos sin cerrar) y
+ * el estado de las mejoras en curso (cambios gobernados), todo en un único
+ * documento descargable.
+ */
+export function generarInformeGobierno(): { nombreArchivo: string; contenido: string } {
+  const fecha = new Date().toLocaleDateString("es-CL");
+  const puntaje = calcularPuntajeGlobal(hallazgosDemo);
+  const brechas = contarBrechasPorCriticidad(hallazgosDemo);
+  const cobertura = coberturaPorDominio(hallazgosDemo);
+  const cambios = almacen.listarCambios();
+  const cambiosActivos = cambios.filter((c) => c.estado !== "Cerrado" && c.estado !== "Rechazado");
+
+  const issues = hallazgosDemo
+    .filter((h) => h.estado === "Brecha" || h.estado === "Parcial" || h.estado === "RequiereLicencia")
+    .sort((a, b) => ORDEN_CRITICIDAD[a.criticidad] - ORDEN_CRITICIDAD[b.criticidad]);
+
+  const filasCobertura = cobertura
+    .map((c) => `| ${c.dominio} | ${c.actual}/100 | ${c.meta}/100 | ${c.brecha > 0 ? `${c.brecha} pts` : "Cumplida"} |`)
+    .join("\n");
+
+  const bloquesIssues = issues
+    .map(
+      (h) => `### [${h.criticidad}] ${h.nombre} — ${h.estado === "RequiereLicencia" ? "Requiere licencia" : h.estado} (${h.dominio})
+- **Qué existe hoy:** ${h.queExiste}
+- **Qué falta:** ${h.queFalta}
+- **Por qué es relevante:** ${h.porQueRelevante}
+- **Cobertura actual:** ${h.cobertura.cubiertos}/${h.cobertura.total}
+- **Próxima acción:** ${h.proximaAccion}
+- **Responsable:** ${h.responsable}
+- **Licencia requerida:** ${h.licenciaRequerida}
+`,
+    )
+    .join("\n");
+
+  const filasCambios = cambios.length
+    ? cambios
+        .map(
+          (c: CambioGobernado) =>
+            `| ${c.id} | ${c.configuracionONombrePolitica} | ${ETIQUETA_ESTADO_CAMBIO[c.estado]} | ${c.riesgo} | ${c.solicitante} | ${c.aprobador} | ${new Date(c.actualizadoEn).toLocaleDateString("es-CL")} |`,
+        )
+        .join("\n")
+    : "| — | Sin cambios gobernados registrados todavía | — | — | — | — | — |";
+
+  const prioritarias = rankingAccionesPrioritarias(hallazgosDemo, 8)
+    .map((h, i) => `${i + 1}. [${h.criticidad}] ${h.nombre} (${h.dominio}) — ${h.proximaAccion}`)
+    .join("\n");
+
+  const contenido = `# Informe de gobierno — Issues y mejoras
+## Phoenix Security Control Center · Tenant Phoenix Service
+Fecha de emisión: ${fecha}
+
+## Resumen ejecutivo
+
+| Indicador | Valor |
+|---|---|
+| Puntaje global de postura | ${puntaje}/100 |
+| Punto de inflexión | ${PUNTO_INFLEXION}/100 |
+| Meta anual | ${META_ANUAL}/100 |
+| Brechas críticas | ${brechas.criticas} |
+| Brechas altas | ${brechas.altas} |
+| Brechas medias | ${brechas.medias} |
+| Brechas bajas | ${brechas.bajas} |
+| Controles implementados | ${brechas.implementados} |
+| Issues abiertos (brecha, parcial o requiere licencia) | ${issues.length} |
+| Mejoras (cambios gobernados) activas | ${cambiosActivos.length} |
+| Mejoras (cambios gobernados) totales | ${cambios.length} |
+
+## Cobertura por dominio
+
+| Dominio | Actual | Meta | Brecha |
+|---|---|---|---|
+${filasCobertura}
+
+## Issues detectados (${issues.length})
+Hallazgos del Assessment que aún no están completamente implementados, ordenados de mayor a menor criticidad.
+
+${bloquesIssues || "Sin issues abiertos — todos los hallazgos evaluados están implementados."}
+
+## Mejoras en curso (cambios gobernados)
+
+| ID | Configuración / Política | Estado | Riesgo | Solicitante | Aprobador | Actualizado |
+|---|---|---|---|---|---|---|
+${filasCambios}
+
+## Próximas acciones prioritarias recomendadas
+${prioritarias || "Sin acciones pendientes de priorizar."}
+
+## Cadencia de revisión de este informe
+- Mensual: alertas, excepciones, controles fallidos y cambios pendientes.
+- Trimestral: riesgos, permisos, licencias, responsables y pruebas de reversión.
+- Anual: actualización de políticas, procedimientos, inventario y plan de mejora continua.
+`;
+
+  return { nombreArchivo: `informe-gobierno-issues-mejoras-${Date.now()}.md`, contenido };
 }

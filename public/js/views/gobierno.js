@@ -26,6 +26,7 @@ async function cargar(app) {
     <div class="toolbar">
       <select id="f-estado"><option value="">Todos los estados</option>${ESTADOS.map((e) => `<option value="${e}">${ETIQUETA_ESTADO[e]}</option>`).join("")}</select>
       <span style="flex:1"></span>
+      <button class="btn-ghost" id="btn-informe" title="Descarga un informe en Markdown con los issues del Assessment y el estado de las mejoras (cambios gobernados)">⬇ Descargar informe de issues y mejoras</button>
       <button class="btn-accent" id="btn-nuevo">+ Nuevo cambio</button>
     </div>
     <div class="table-wrap">
@@ -37,6 +38,7 @@ async function cargar(app) {
   `;
   app.querySelector("#f-estado").addEventListener("change", () => filtrar(app));
   app.querySelector("#btn-nuevo").addEventListener("click", () => formularioNuevoCambio(app));
+  app.querySelector("#btn-informe").addEventListener("click", () => descargar("/artifacts/informe-gobierno"));
   app.querySelector("#tabla-cambios").addEventListener("click", (ev) => {
     const btn = ev.target.closest("[data-ver]");
     if (btn) mostrarDetalle(app, btn.dataset.ver);

@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { generarArtefacto, generarInventarioGeneral, type TipoArtefacto } from "../services/artifactService";
+import { generarArtefacto, generarInformeGobierno, generarInventarioGeneral, type TipoArtefacto } from "../services/artifactService";
 
 export const artifactsRouter = Router();
 
@@ -20,6 +20,13 @@ artifactsRouter.get("/tipos", (_req, res) => {
 
 artifactsRouter.get("/inventario", (_req, res) => {
   const { nombreArchivo, contenido } = generarInventarioGeneral();
+  res.setHeader("Content-Type", "text/markdown; charset=utf-8");
+  res.setHeader("Content-Disposition", `attachment; filename="${nombreArchivo}"`);
+  res.send(contenido);
+});
+
+artifactsRouter.get("/informe-gobierno", (_req, res) => {
+  const { nombreArchivo, contenido } = generarInformeGobierno();
   res.setHeader("Content-Type", "text/markdown; charset=utf-8");
   res.setHeader("Content-Disposition", `attachment; filename="${nombreArchivo}"`);
   res.send(contenido);
