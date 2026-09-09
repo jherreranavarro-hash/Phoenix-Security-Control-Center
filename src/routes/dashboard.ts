@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { isDemoMode } from "../config";
 import { almacen } from "../lib/store";
-import { hallazgosDemo } from "../data/demoAssessment";
+import { obtenerHallazgosEfectivos } from "../services/assessmentService";
 import {
   META_ANUAL,
   PUNTO_INFLEXION,
@@ -15,21 +15,23 @@ import {
 
 export const dashboardRouter = Router();
 
-dashboardRouter.get("/resumen", (_req, res) => {
-  const puntaje = calcularPuntajeGlobal();
-  const brechas = contarBrechasPorCriticidad();
+dashboardRouter.get("/resumen", async (_req, res) => {
+  const { hallazgos, fuente } = await obtenerHallazgosEfectivos();
+  const puntaje = calcularPuntajeGlobal(hallazgos);
+  const brechas = contarBrechasPorCriticidad(hallazgos);
   const cambiosPendientes = almacen.listarCambios().filter((c) => c.estado === "Aprobacion").length;
   const actividadReciente = almacen.listarAuditoria(10);
 
   res.json({
     modoDemostracion: isDemoMode,
+    fuenteAssessment: fuente,
     puntajeGlobal: puntaje,
     puntoInflexion: PUNTO_INFLEXION,
     metaAnual: META_ANUAL,
     brechas,
     cambiosPendientesAprobacion: cambiosPendientes,
     actividadReciente,
-    planMejoraRecomendado: rankingAccionesPrioritarias(hallazgosDemo, 5).map((h) => ({
+    planMejoraRecomendado: rankingAccionesPrioritarias(hallazgos, 5).map((h) => ({
       id: h.id,
       nombre: h.nombre,
       dominio: h.dominio,
@@ -46,15 +48,17 @@ dashboardRouter.get("/resumen", (_req, res) => {
   });
 });
 
-dashboardRouter.get("/kpi", (_req, res) => {
+dashboardRouter.get("/kpi", async (_req, res) => {
+  const { hallazgos, fuente } = await obtenerHallazgosEfectivos();
   res.json({
     modoDemostracion: isDemoMode,
-    puntajeGlobal: calcularPuntajeGlobal(),
+    fuenteAssessment: fuente,
+    puntajeGlobal: calcularPuntajeGlobal(hallazgos),
     puntoInflexion: PUNTO_INFLEXION,
     metaAnual: META_ANUAL,
-    coberturaPorDominio: coberturaPorDominio(),
-    proyeccion: proyeccionMejora(),
-    rankingAcciones: rankingAccionesPrioritarias(hallazgosDemo, 8),
+    coberturaPorDominio: coberturaPorDominio(hallazgos),
+    proyeccion: proyeccionMejora(hallazgos),
+    rankingAcciones: rankingAccionesPrioritarias(hallazgos, 8),
     tendenciaMensual: tendenciaMensualDemostrativa(),
   });
 });

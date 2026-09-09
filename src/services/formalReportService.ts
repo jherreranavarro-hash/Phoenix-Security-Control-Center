@@ -13,9 +13,8 @@ import {
   VerticalAlign,
   WidthType,
 } from "docx";
-import { hallazgosDemo } from "../data/demoAssessment";
 import { almacen } from "../lib/store";
-import { isDemoMode } from "../config";
+import { obtenerHallazgosEfectivos } from "./assessmentService";
 import {
   META_ANUAL,
   PUNTO_INFLEXION,
@@ -195,17 +194,18 @@ function parrafo(etiqueta: string, texto: string): Paragraph {
 
 export async function generarInformeFormalAssessment(): Promise<Buffer> {
   const fecha = new Date().toLocaleDateString("es-CL", { day: "2-digit", month: "long", year: "numeric" });
-  const puntaje = calcularPuntajeGlobal(hallazgosDemo);
-  const brechas = contarBrechasPorCriticidad(hallazgosDemo);
-  const cobertura = coberturaPorDominio(hallazgosDemo);
+  const { hallazgos, fuente } = await obtenerHallazgosEfectivos();
+  const puntaje = calcularPuntajeGlobal(hallazgos);
+  const brechas = contarBrechasPorCriticidad(hallazgos);
+  const cobertura = coberturaPorDominio(hallazgos);
   const cambios = almacen.listarCambios();
   const cambiosActivos = cambios.filter((c) => c.estado !== "Cerrado" && c.estado !== "Rechazado");
 
-  const issues = hallazgosDemo
+  const issues = hallazgos
     .filter((h) => h.estado === "Brecha" || h.estado === "Parcial" || h.estado === "RequiereLicencia")
     .sort((a, b) => ORDEN_CRITICIDAD[a.criticidad] - ORDEN_CRITICIDAD[b.criticidad]);
 
-  const prioritarias = rankingAccionesPrioritarias(hallazgosDemo, 8);
+  const prioritarias = rankingAccionesPrioritarias(hallazgos, 8);
 
   const portada: Paragraph[] = [
     new Paragraph({ spacing: { before: 1200 }, children: [] }),
@@ -300,7 +300,7 @@ export async function generarInformeFormalAssessment(): Promise<Buffer> {
       spacing: { after: 120 },
       children: [
         new TextRun({
-          text: `Fuente de datos: ${isDemoMode ? "modo de demostración (sin credenciales de Microsoft Graph configuradas)." : "conexión activa de solo lectura a Microsoft Graph sobre el tenant Phoenix Service."}`,
+          text: `Fuente de datos: ${fuente === "graph" ? "los hallazgos de Entra ID se calculan en tiempo real a partir de las políticas de acceso condicional y de autenticación del tenant Phoenix Service vía Microsoft Graph; el resto del catálogo (Intune, Defender, Purview, Exchange) proviene del relevamiento curado por el equipo de seguridad." : "modo de demostración (sin credenciales de Microsoft Graph configuradas)."}`,
           size: 20,
           color: COLOR_TEXTO_SUAVE,
         }),
@@ -320,7 +320,7 @@ export async function generarInformeFormalAssessment(): Promise<Buffer> {
       spacing: { after: 120 },
       children: [
         new TextRun({
-          text: "Nota metodológica: el catálogo de hallazgos de este informe es mantenido y revisado por el equipo de seguridad de Phoenix Service. La verificación automática y continua de cada control directamente contra la configuración en vivo del tenant vía Microsoft Graph es una capacidad en desarrollo de la plataforma; hasta su disponibilidad, este informe refleja el último relevamiento documentado.",
+          text: "Nota metodológica: los hallazgos de Entra ID relacionados con acceso condicional, MFA, autenticación heredada, métodos resistentes a phishing y licenciamiento P2 se determinan automáticamente contra la configuración en vivo del tenant. El resto del catálogo (Intune, Defender, Purview, Exchange, y la gobernanza de cuentas de emergencia dentro de Entra ID) es mantenido y revisado manualmente por el equipo de seguridad de Phoenix Service; su verificación automática contra Microsoft Graph es la siguiente etapa de esta plataforma.",
           size: 20,
           color: COLOR_TEXTO_SUAVE,
           italics: true,

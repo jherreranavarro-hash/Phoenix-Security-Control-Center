@@ -26,11 +26,15 @@ artifactsRouter.get("/inventario", (_req, res) => {
   res.send(contenido);
 });
 
-artifactsRouter.get("/informe-gobierno", (_req, res) => {
-  const { nombreArchivo, contenido } = generarInformeGobierno();
-  res.setHeader("Content-Type", "text/markdown; charset=utf-8");
-  res.setHeader("Content-Disposition", `attachment; filename="${nombreArchivo}"`);
-  res.send(contenido);
+artifactsRouter.get("/informe-gobierno", async (_req, res) => {
+  try {
+    const { nombreArchivo, contenido } = await generarInformeGobierno();
+    res.setHeader("Content-Type", "text/markdown; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="${nombreArchivo}"`);
+    res.send(contenido);
+  } catch (error) {
+    res.status(502).json({ error: error instanceof Error ? error.message : "Error generando el informe." });
+  }
 });
 
 artifactsRouter.get("/informe-gobierno.docx", async (_req, res) => {

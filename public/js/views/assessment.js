@@ -16,6 +16,7 @@ export async function renderAssessment(app) {
 function plantilla(data) {
   return `
     ${data.modoDemostracion ? `<div class="alert alert-warn">${badgeModo(true)} Radiografía calculada sobre datos de demostración del tenant.</div>` : ""}
+    ${!data.modoDemostracion && data.fuenteAssessment === "graph" ? `<div class="alert alert-info">✓ Hallazgos de Entra ID detectados en tiempo real contra las políticas del tenant Phoenix Service vía Microsoft Graph. El resto del catálogo (Intune, Defender, Purview, Exchange) es curado por el equipo de seguridad.</div>` : ""}
     <div class="toolbar">
       <input id="f-buscar" placeholder="Buscar hallazgo…" />
       <select id="f-dominio"><option value="">Todos los dominios</option>${DOMINIOS.map((d) => `<option value="${d}">${d}</option>`).join("")}</select>

@@ -2,6 +2,7 @@ import { obtenerCambio } from "./changeService";
 import { almacen } from "../lib/store";
 import { hallazgosDemo } from "../data/demoAssessment";
 import { catalogoPoliticas } from "../data/policyCatalog";
+import { obtenerHallazgosEfectivos } from "./assessmentService";
 import {
   META_ANUAL,
   PUNTO_INFLEXION,
@@ -202,15 +203,16 @@ const ORDEN_CRITICIDAD: Record<Hallazgo["criticidad"], number> = { Critica: 0, A
  * el estado de las mejoras en curso (cambios gobernados), todo en un único
  * documento descargable.
  */
-export function generarInformeGobierno(): { nombreArchivo: string; contenido: string } {
+export async function generarInformeGobierno(): Promise<{ nombreArchivo: string; contenido: string }> {
   const fecha = new Date().toLocaleDateString("es-CL");
-  const puntaje = calcularPuntajeGlobal(hallazgosDemo);
-  const brechas = contarBrechasPorCriticidad(hallazgosDemo);
-  const cobertura = coberturaPorDominio(hallazgosDemo);
+  const { hallazgos, fuente } = await obtenerHallazgosEfectivos();
+  const puntaje = calcularPuntajeGlobal(hallazgos);
+  const brechas = contarBrechasPorCriticidad(hallazgos);
+  const cobertura = coberturaPorDominio(hallazgos);
   const cambios = almacen.listarCambios();
   const cambiosActivos = cambios.filter((c) => c.estado !== "Cerrado" && c.estado !== "Rechazado");
 
-  const issues = hallazgosDemo
+  const issues = hallazgos
     .filter((h) => h.estado === "Brecha" || h.estado === "Parcial" || h.estado === "RequiereLicencia")
     .sort((a, b) => ORDEN_CRITICIDAD[a.criticidad] - ORDEN_CRITICIDAD[b.criticidad]);
 
@@ -241,13 +243,14 @@ export function generarInformeGobierno(): { nombreArchivo: string; contenido: st
         .join("\n")
     : "| — | Sin cambios gobernados registrados todavía | — | — | — | — | — |";
 
-  const prioritarias = rankingAccionesPrioritarias(hallazgosDemo, 8)
+  const prioritarias = rankingAccionesPrioritarias(hallazgos, 8)
     .map((h, i) => `${i + 1}. [${h.criticidad}] ${h.nombre} (${h.dominio}) — ${h.proximaAccion}`)
     .join("\n");
 
   const contenido = `# Informe de gobierno — Issues y mejoras
 ## Phoenix Security Control Center · Tenant Phoenix Service
 Fecha de emisión: ${fecha}
+Fuente del Assessment: ${fuente === "graph" ? "detección en tiempo real contra Microsoft Graph (Entra ID) + catálogo curado (resto de dominios)" : "catálogo de demostración"}
 
 ## Resumen ejecutivo
 
