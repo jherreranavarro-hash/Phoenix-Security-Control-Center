@@ -1,4 +1,4 @@
-import { api } from "../api.js";
+import { api, descargar } from "../api.js";
 import { abrirModal, badgeCriticidad, badgeEstado, cerrarModal, esc, porcentaje, toast } from "../ui.js";
 
 const PRODUCTOS = ["Entra ID", "Intune", "Defender", "Purview", "Exchange"];
@@ -14,6 +14,7 @@ export async function renderPoliticas(app) {
       <input id="f-buscar" placeholder="Buscar política…" />
       <select id="f-producto"><option value="">Todos los productos</option>${PRODUCTOS.map((p) => `<option value="${p}">${p}</option>`).join("")}</select>
       <span style="flex:1"></span>
+      <button class="btn-ghost" id="btn-informe-politicas" title="Descarga en Word las políticas de Microsoft 365 recomendadas por el Assessment, organizadas por producto">⬇ Políticas recomendadas (Word)</button>
       <span id="contador-seleccion" class="badge badge-neutro">0 seleccionadas</span>
       <button class="btn-accent" id="btn-crear-cambios" disabled>Crear cambios gobernados</button>
     </div>
@@ -77,6 +78,7 @@ function cablear(app) {
   });
 
   app.querySelector("#btn-crear-cambios").addEventListener("click", () => formularioCrearCambios());
+  app.querySelector("#btn-informe-politicas").addEventListener("click", () => descargar("/artifacts/informe-politicas.docx"));
 }
 
 function mostrarDetalle(id) {
