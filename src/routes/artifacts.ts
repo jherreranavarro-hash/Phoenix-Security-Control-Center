@@ -2,8 +2,28 @@ import { Router } from "express";
 import { generarArtefacto, generarInformeGobierno, generarInventarioGeneral, type TipoArtefacto } from "../services/artifactService";
 import { generarInformeFormalAssessment } from "../services/formalReportService";
 import { generarInformePoliticasRecomendadas } from "../services/policyReportService";
+import {
+  generarInformeCampaniaBusinessPremium,
+  generarInformeExchange,
+  generarInformeGrupos,
+  generarInformeLicencias,
+  generarInformeUsuarios,
+} from "../services/directoryReportService";
 
 export const artifactsRouter = Router();
+
+function registrarInformeDocx(ruta: string, nombreBase: string, generar: () => Promise<Buffer>): void {
+  artifactsRouter.get(ruta, async (_req, res) => {
+    try {
+      const buffer = await generar();
+      res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+      res.setHeader("Content-Disposition", `attachment; filename="${nombreBase}-${Date.now()}.docx"`);
+      res.send(buffer);
+    } catch (error) {
+      res.status(500).json({ error: error instanceof Error ? error.message : "Error generando el informe." });
+    }
+  });
+}
 
 const TIPOS: TipoArtefacto[] = [
   "politica-gobierno",
@@ -38,27 +58,13 @@ artifactsRouter.get("/informe-gobierno", async (_req, res) => {
   }
 });
 
-artifactsRouter.get("/informe-gobierno.docx", async (_req, res) => {
-  try {
-    const buffer = await generarInformeFormalAssessment();
-    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
-    res.setHeader("Content-Disposition", `attachment; filename="informe-assessment-gobierno-${Date.now()}.docx"`);
-    res.send(buffer);
-  } catch (error) {
-    res.status(500).json({ error: error instanceof Error ? error.message : "Error generando el informe." });
-  }
-});
-
-artifactsRouter.get("/informe-politicas.docx", async (_req, res) => {
-  try {
-    const buffer = await generarInformePoliticasRecomendadas();
-    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
-    res.setHeader("Content-Disposition", `attachment; filename="informe-politicas-recomendadas-${Date.now()}.docx"`);
-    res.send(buffer);
-  } catch (error) {
-    res.status(500).json({ error: error instanceof Error ? error.message : "Error generando el informe." });
-  }
-});
+registrarInformeDocx("/informe-gobierno.docx", "informe-assessment-gobierno", generarInformeFormalAssessment);
+registrarInformeDocx("/informe-politicas.docx", "informe-politicas-recomendadas", generarInformePoliticasRecomendadas);
+registrarInformeDocx("/informe-usuarios.docx", "informe-usuarios", generarInformeUsuarios);
+registrarInformeDocx("/informe-grupos.docx", "informe-grupos", generarInformeGrupos);
+registrarInformeDocx("/informe-licencias.docx", "informe-licencias", generarInformeLicencias);
+registrarInformeDocx("/informe-exchange.docx", "informe-exchange", generarInformeExchange);
+registrarInformeDocx("/informe-campania.docx", "informe-campania-business-premium", generarInformeCampaniaBusinessPremium);
 
 artifactsRouter.get("/:tipo/:cambioId", (req, res) => {
   const tipo = req.params.tipo as TipoArtefacto;

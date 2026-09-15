@@ -1,4 +1,4 @@
-import { api } from "../api.js";
+import { api, descargar } from "../api.js";
 import { abrirModal, badgeCriticidad, badgeEstado, cerrarModal, esc, toast } from "../ui.js";
 
 const TABS = [
@@ -46,6 +46,7 @@ async function pintarUsuarios(cont) {
       <select id="fu-area"><option value="">Todas las áreas</option>${areas.map((a) => `<option>${esc(a)}</option>`).join("")}</select>
       <select id="fu-estado"><option value="">Todos los estados</option><option value="activo">Activos</option><option value="inactivo">Bloqueados</option></select>
       <span style="flex:1"></span>
+      <button class="btn-ghost" id="btn-informe-usuarios">⬇ Informe (Word)</button>
       <button class="btn-accent" id="btn-nuevo-usuario">+ Crear usuario</button>
     </div>
     <div class="table-wrap"><table>
@@ -90,6 +91,7 @@ async function pintarUsuarios(cont) {
   pintar();
 
   cont.querySelector("#btn-nuevo-usuario").addEventListener("click", () => formularioCrearUsuario(cont));
+  cont.querySelector("#btn-informe-usuarios").addEventListener("click", () => descargar("/artifacts/informe-usuarios.docx"));
 }
 
 function generarPasswordVisible() {
@@ -268,7 +270,7 @@ function gestionarUsuario(cont, u) {
 async function pintarGrupos(cont) {
   const data = await api.get("/groups");
   cont.innerHTML = `
-    <div class="toolbar"><span style="flex:1"></span><button class="btn-accent" id="btn-nuevo-grupo">+ Crear grupo y desplegar políticas</button></div>
+    <div class="toolbar"><span style="flex:1"></span><button class="btn-ghost" id="btn-informe-grupos">⬇ Informe (Word)</button><button class="btn-accent" id="btn-nuevo-grupo">+ Crear grupo y desplegar políticas</button></div>
     <div class="table-wrap"><table>
       <thead><tr><th>Nombre</th><th>Clasificación</th><th>Propósito</th><th>Miembros</th><th></th></tr></thead>
       <tbody>
@@ -287,6 +289,7 @@ async function pintarGrupos(cont) {
     </table></div>
   `;
   cont.querySelector("#btn-nuevo-grupo").addEventListener("click", () => formularioCrearGrupo(cont));
+  cont.querySelector("#btn-informe-grupos").addEventListener("click", () => descargar("/artifacts/informe-grupos.docx"));
   cont.querySelectorAll("[data-gestionar]").forEach((btn) =>
     btn.addEventListener("click", () => pasoMiembrosYPoliticas(cont, data.grupos.find((g) => g.id === btn.dataset.gestionar))),
   );
@@ -499,7 +502,7 @@ async function pintarLicencias(cont) {
     </div>
 
     <div class="section-title">Usuarios y licencias</div>
-    <div class="toolbar"><input id="fl-buscar" placeholder="Buscar usuario…" /><span class="pill">Sin licencia: ${asignaciones.sinLicencia}</span></div>
+    <div class="toolbar"><input id="fl-buscar" placeholder="Buscar usuario…" /><span class="pill">Sin licencia: ${asignaciones.sinLicencia}</span><span style="flex:1"></span><button class="btn-ghost" id="btn-informe-licencias">⬇ Informe (Word)</button></div>
     <div class="table-wrap"><table>
       <thead><tr><th>Usuario</th><th>Área</th><th>Licencias actuales</th><th>Estado</th><th></th></tr></thead>
       <tbody id="tbl-licencias"></tbody>
@@ -526,6 +529,7 @@ async function pintarLicencias(cont) {
     const btn = ev.target.closest("[data-lic]");
     if (btn) formularioLicenciaIndividual(cont, asignaciones.usuarios.find((u) => u.id === btn.dataset.lic), skus.skus);
   });
+  cont.querySelector("#btn-informe-licencias").addEventListener("click", () => descargar("/artifacts/informe-licencias.docx"));
   pintar();
 }
 
@@ -574,7 +578,7 @@ function formularioLicenciaIndividual(cont, u, skus) {
 async function pintarExchange(cont) {
   const data = await api.get("/users");
   cont.innerHTML = `
-    <div class="toolbar"><input id="fe-buscar" placeholder="Buscar usuario…" /></div>
+    <div class="toolbar"><input id="fe-buscar" placeholder="Buscar usuario…" /><span style="flex:1"></span><button class="btn-ghost" id="btn-informe-exchange">⬇ Informe (Word)</button></div>
     <div class="table-wrap"><table>
       <thead><tr><th>Usuario</th><th>Alias</th><th>Reenvío</th><th>Respuesta automática</th><th>Delegados</th><th></th></tr></thead>
       <tbody id="tbl-exchange"></tbody>
@@ -601,6 +605,7 @@ async function pintarExchange(cont) {
     const btn = ev.target.closest("[data-ex]");
     if (btn) formularioExchange(cont, data.usuarios.find((u) => u.id === btn.dataset.ex));
   });
+  cont.querySelector("#btn-informe-exchange").addEventListener("click", () => descargar("/artifacts/informe-exchange.docx"));
   pintar();
 }
 
@@ -675,6 +680,7 @@ async function pintarCampania(cont) {
 
     <div style="margin-top:16px;display:flex;gap:10px">
       <button class="btn-ghost" id="btn-refrescar">Actualizar revisión</button>
+      <button class="btn-ghost" id="btn-informe-campania">⬇ Informe (Word)</button>
       <button class="btn-accent" id="btn-ejecutar" ${vista.suficientes && vista.elegibles.length > 0 ? "" : "disabled"}>Ejecutar campaña masiva</button>
     </div>
 
@@ -683,6 +689,7 @@ async function pintarCampania(cont) {
   `;
 
   cont.querySelector("#btn-refrescar").addEventListener("click", () => pintarCampania(cont));
+  cont.querySelector("#btn-informe-campania").addEventListener("click", () => descargar("/artifacts/informe-campania.docx"));
   cont.querySelector("#btn-ejecutar").addEventListener("click", () => modalEjecutarCampania(cont, vista));
   cargarHistorial(cont);
 }

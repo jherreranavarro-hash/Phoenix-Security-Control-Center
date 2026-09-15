@@ -2,6 +2,7 @@ import {
   AlignmentType,
   BorderStyle,
   HeadingLevel,
+  PageOrientation,
   Paragraph,
   ShadingType,
   Table,
@@ -12,6 +13,17 @@ import {
   WidthType,
 } from "docx";
 import type { Hallazgo } from "../types";
+
+/**
+ * Propiedades de página en horizontal (apaisada), para informes centrados en
+ * tablas anchas (usuarios, grupos, licencias, buzones). Se pasan las
+ * dimensiones de A4 en vertical con orientación LANDSCAPE: docx-js
+ * intercambia ancho y alto internamente.
+ */
+export const PAGINA_APAISADA = {
+  size: { width: 11906, height: 16838, orientation: PageOrientation.LANDSCAPE },
+  margin: { top: 900, bottom: 900, left: 900, right: 900 },
+};
 
 /**
  * Piezas de estilo compartidas entre los informes formales en Word
